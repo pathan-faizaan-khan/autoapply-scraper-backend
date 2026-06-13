@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+playwright
+apscheduler
+SQLAlchemy
+asyncpg
+python-dotenv
+psycopg2-binary
+httpx
+groq
+dnspython

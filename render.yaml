@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: auto-apply-scraper
+    env: python
+    # Install Python dependencies and Playwright OS dependencies/browser
+    buildCommand: "pip install -r requirements.txt && playwright install --with-deps chromium"
+    # Start FastAPI with Uvicorn
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0" # Specify Python version to ensure compatibility
+      # Secret variables to be set in the Render Dashboard
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
