@@ -3,7 +3,7 @@ services:
     name: auto-apply-scraper
     env: python
     # Install Python dependencies and Playwright OS dependencies/browser
-    buildCommand: "pip install -r requirements.txt && playwright install --with-deps chromium"
+    buildCommand: "pip install -r requirements.txt && playwright install chromium"
     # Start FastAPI with Uvicorn
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:

@@ -179,7 +179,13 @@ Instructions:
             response_format={"type": "json_object"},
             temperature=0.7,
         )
-        result = json.loads(chat.choices[0].message.content)
+        content = chat.choices[0].message.content
+        import re
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\n?", "", content)
+            content = re.sub(r"\n?```$", "", content.strip())
+            
+        result = json.loads(content)
         return {"subject": result.get("subject", ""), "body": result.get("body", "")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email generation error: {str(e)}")
@@ -222,7 +228,13 @@ Original Resume JSON:
             response_format={"type": "json_object"},
             temperature=0.3,
         )
-        result = json.loads(chat.choices[0].message.content)
+        content = chat.choices[0].message.content
+        import re
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\n?", "", content)
+            content = re.sub(r"\n?```$", "", content.strip())
+            
+        result = json.loads(content)
         changes = result.pop("changes", ["Summary rewritten", "Skills reordered"])
         return {"tailored_resume": result, "changes": changes}
     except Exception as e:
