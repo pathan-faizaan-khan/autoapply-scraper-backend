@@ -28,9 +28,9 @@ def fill_form_endpoint(req: AutofillRequest):
 
     system_prompt = (
         "You are an AI assistant that auto-fills job application forms.\n"
-        "You will be given a JSON object containing the user's data, a list of form fields, and the raw HTML snippet of the form.\n"
-        "Your task is to analyze the HTML to understand the visual context of the form (e.g. which section a field is under, what the label actually says) "
-        "and then map the correct user data value to each form field.\n"
+        "You will be given a JSON object containing the user's data, a list of form fields, and a dense text representation of the form.\n"
+        "The dense text representation contains all the visible text on the page, with input fields represented as tags like [FIELD:autoApplyId name=\"...\"] directly where they appear.\n"
+        "Your task is to analyze this text to understand the exact visual context of each field (e.g., the text immediately preceding the [FIELD:...] tag is usually its label or question).\n"
         "Pay attention to field 'options' if they exist, and select the closest matching option exactly as written.\n"
         "If a field asks for boolean (checkboxes), return a boolean.\n"
         "If a field cannot be answered using the provided user data, omit it or guess a reasonable default if it's a generic question.\n"
@@ -38,7 +38,7 @@ def fill_form_endpoint(req: AutofillRequest):
         "DO NOT output markdown formatting like ```json. Output raw JSON.\n"
     )
     
-    user_prompt = f"User Data:\n{json.dumps(req.user_data)}\n\nForm HTML Context:\n{req.form_html}\n\nForm Fields to Fill:\n{json.dumps(fields)}"
+    user_prompt = f"User Data:\n{json.dumps(req.user_data)}\n\nDense Form Text:\n{req.form_html}\n\nForm Fields to Fill:\n{json.dumps(fields)}"
 
     try:
         response = groq_client.chat.completions.create(
