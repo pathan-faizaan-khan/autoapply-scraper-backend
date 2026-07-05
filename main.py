@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 from scraper.playwright_scraper import run_scraper
 from routers.jobs_search import router as jobs_search_router
+from routers.ml_autofill import router as ml_autofill_router
 
 load_dotenv()
 
@@ -26,6 +27,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(jobs_search_router)
+app.include_router(ml_autofill_router)
 
 scheduler = BackgroundScheduler()
 
