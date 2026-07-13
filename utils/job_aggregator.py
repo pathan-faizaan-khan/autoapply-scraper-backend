@@ -40,9 +40,44 @@ def _random_headers():
         "Cache-Control": "no-cache",
     }
 
+# Known job aggregator hostnames — domain extracted from job_url for these
+# should NOT be used as the company domain.
+_AGGREGATOR_HOSTS = {
+    "jobicy.com", "remotive.com", "remoteok.com", "remoteok.io",
+    "arbeitnow.com", "weworkremotely.com", "indeed.com", "linkedin.com",
+    "glassdoor.com", "monster.com", "ziprecruiter.com", "simplyhired.com",
+    "jooble.org", "wellfound.com", "angel.co", "builtin.com",
+    "stackoverflow.com", "greenhouse.io", "lever.co", "workday.com",
+    "myworkdayjobs.com", "jobvite.com", "smartrecruiters.com", "icims.com",
+    "breezy.hr", "bamboohr.com", "ashby.com", "dover.com",
+}
+
 def _extract_domain(url: str) -> str:
+    """Extract raw hostname from any URL."""
     m = re.search(r"https?://(?:www\.)?([^/]+)", url)
-    return m.group(1) if m else ""
+    return m.group(1).lower() if m else ""
+
+def _extract_company_domain(company_url: str, job_url: str = "") -> str:
+    """
+    Return the company's OWN domain, never an aggregator domain.
+    - Prefers explicit company_url provided by the API.
+    - Falls back to job_url ONLY if it does not belong to a known aggregator.
+    - Returns empty string when the domain cannot be determined reliably.
+    """
+    # Prefer the explicit company website field
+    if company_url:
+        d = _extract_domain(company_url)
+        if d and d not in _AGGREGATOR_HOSTS:
+            return d
+
+    # Fall back to job_url only when it points to the company's own ATS
+    if job_url:
+        d = _extract_domain(job_url)
+        if d and d not in _AGGREGATOR_HOSTS:
+            return d
+
+    # Cannot reliably determine the company domain — return empty
+    return ""
 
 def _normalize(job: dict) -> dict:
     """Ensure all jobs have a consistent schema."""
@@ -53,7 +88,11 @@ def _normalize(job: dict) -> dict:
         "description":  job.get("description", "")[:4000].strip(),
         "location":     job.get("location", "Remote").strip(),
         "source":       job.get("source", "unknown"),
-        "domain":       _extract_domain(job.get("job_url", "")),
+        # domain = company's own domain (NOT the aggregator's posting URL)
+        "domain":       _extract_company_domain(
+                            job.get("company_url", ""),
+                            job.get("job_url", ""),
+                        ),
     }
 
 def _keyword_match(text: str, query: str) -> bool:
@@ -86,6 +125,8 @@ async def _fetch_remotive(query: str, location: str, session: aiohttp.ClientSess
                 "title":        j.get("title", ""),
                 "company_name": j.get("company_name", ""),
                 "job_url":      j.get("url", ""),
+                # Remotive provides the company's own website in "company_url"
+                "company_url":  j.get("company_url", ""),
                 "description":  re.sub(r"<[^>]+>", " ", j.get("description", "")),
                 "location":     j.get("candidate_required_location", "Remote"),
                 "source":       "remotive",
@@ -117,6 +158,8 @@ async def _fetch_jobicy(query: str, location: str, session: aiohttp.ClientSessio
                 "title":        j.get("jobTitle", ""),
                 "company_name": j.get("companyName", ""),
                 "job_url":      j.get("url", ""),
+                # Jobicy provides the employer's website in "companyUrl"
+                "company_url":  j.get("companyUrl", ""),
                 "description":  re.sub(r"<[^>]+>", " ", j.get("jobDescription", "")),
                 "location":     j.get("jobGeo", "Remote"),
                 "source":       "jobicy",
@@ -154,6 +197,8 @@ async def _fetch_remoteok(query: str, session: aiohttp.ClientSession) -> list[di
                 "title":        title,
                 "company_name": company,
                 "job_url":      j.get("url", f"https://remoteok.com/remote-jobs/{j.get('id', '')}"),
+                # RemoteOK provides the company's own apply URL in "apply_url"
+                "company_url":  j.get("apply_url", ""),
                 "description":  re.sub(r"<[^>]+>", " ", j.get("description", "")),
                 "location":     "Remote",
                 "source":       "remoteok",
