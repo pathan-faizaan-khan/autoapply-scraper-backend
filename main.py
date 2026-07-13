@@ -52,6 +52,13 @@ def startup_event():
 def shutdown_event():
     scheduler.shutdown()
 
+def run_scraper_sync():
+    import sys
+    import asyncio
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    asyncio.run(run_scraper())
+
 @app.post("/api/scrape/run")
 def trigger_scrape(background_tasks: BackgroundTasks):
     try:

@@ -9,3 +9,5 @@ psycopg2-binary
 httpx
 groq
 dnspython
+playwright_stealth
+aiohttp 

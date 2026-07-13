@@ -6,23 +6,32 @@ import json
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 from dotenv import load_dotenv
-from utils.google_jobs_scraper import scrape_google_jobs
+from utils.job_aggregator import scrape_google_jobs
 
 load_dotenv()
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-elif DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+_engine = None
+_AsyncSessionLocal = None
 
-engine = create_async_engine(DATABASE_URL, echo=True)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+def get_session_maker():
+    global _engine, _AsyncSessionLocal
+    if _engine is None:
+        db_url = DATABASE_URL
+        if db_url and db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif db_url and db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        
+        _engine = create_async_engine(db_url, echo=True, connect_args={"statement_cache_size": 0})
+        _AsyncSessionLocal = sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+    return _AsyncSessionLocal
 
 async def run_scraper():
-    print("Starting Playwright scraper for personalized Google Jobs...")
+    print("Starting multi-source job aggregator (APIs + RSS + DuckDuckGo)...")
     
-    async with AsyncSessionLocal() as session:
+    SessionLocal = get_session_maker()
+    async with SessionLocal() as session:
         # Fetch active campaigns to get user preferences
         try:
             result = await session.execute(text("SELECT target_roles, company_types, location_pref FROM outreach_campaigns WHERE status = 'active'"))
@@ -85,7 +94,8 @@ async def run_scraper():
         print("No jobs found during this scrape run.")
 
 async def save_jobs_to_db(jobs):
-    async with AsyncSessionLocal() as session:
+    SessionLocal = get_session_maker()
+    async with SessionLocal() as session:
         for job in jobs:
             try:
                 query = text("""

@@ -13,7 +13,7 @@ from typing import Optional
 from groq import Groq
 from playwright.async_api import async_playwright
 
-from utils.google_jobs_scraper import scrape_google_jobs
+from utils.job_aggregator import scrape_google_jobs
 from utils.contact_finder import discover_contacts
 from utils.matching import compute_match_score
 
@@ -71,23 +71,27 @@ def google_jobs_search(req: JobSearchRequest):
     Tries the dedicated Google Jobs panel first, falls back to organic results.
     """
     try:
+        import sys
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            
         jobs = asyncio.run(scrape_google_jobs(
             query=req.query,
             location=req.location or "",
             company_type=req.company_type or "",
-            num_results=req.num_results or 10,
+            num_results=min(req.num_results or 20, 50),
         ))
 
-        # If scraping returns nothing (e.g., bot detection), fall back to mock
+        # If scraping returns nothing, just return empty list
         if not jobs:
-            print(f"[JobSearch] Scraper returned 0 results for '{req.query}', using mock fallback")
-            return {"jobs": _mock_jobs(req.query, req.location or ""), "source": "mock"}
+            print(f"[JobSearch] Scraper returned 0 results for '{req.query}'")
+            return {"jobs": [], "source": "google_scrape"}
 
         return {"jobs": jobs, "source": jobs[0].get("source", "google_scrape")}
 
     except Exception as e:
-        print(f"[JobSearch] Error: {e} — falling back to mock")
-        return {"jobs": _mock_jobs(req.query, req.location or ""), "source": "mock"}
+        print(f"[JobSearch] Error: {e}")
+        return {"jobs": [], "source": "error"}
 
 
 @router.post("/jobs/scrape-description")

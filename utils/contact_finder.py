@@ -16,7 +16,7 @@ import smtplib
 import dns.resolver
 from playwright.async_api import async_playwright
 from typing import Optional
-from utils.google_jobs_scraper import ddg_linkedin_search
+from utils.job_aggregator import ddg_linkedin_search
 from groq import AsyncGroq
 from dotenv import load_dotenv
 
