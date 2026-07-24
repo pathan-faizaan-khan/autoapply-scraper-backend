@@ -111,6 +111,7 @@ class RAGService:
         self,
         db: AsyncSession,
         document: DocumentChunk,
+        user_id: Optional[str] = None,
     ) -> Optional[int]:
         """
         Embed a single document and upsert it into career_documents.
@@ -136,7 +137,7 @@ class RAGService:
                      created_at, updated_at)
                 VALUES
                     (:title, :content, :source, :category, :metadata,
-                     :embedding::vector, NOW(), NOW())
+                     CAST(:embedding AS vector), NOW(), NOW())
                 ON CONFLICT (title, source) DO UPDATE
                     SET content    = EXCLUDED.content,
                         category   = EXCLUDED.category,
@@ -146,12 +147,16 @@ class RAGService:
                 RETURNING id
             """)
 
+            meta = document.metadata.copy()
+            if user_id:
+                meta["user_id"] = user_id
+
             result = await db.execute(sql, {
                 "title":     document.title,
                 "content":   document.content,
                 "source":    document.source,
                 "category":  document.category,
-                "metadata":  json.dumps(document.metadata),
+                "metadata":  json.dumps(meta),
                 "embedding": embedding_str,
             })
             await db.commit()
@@ -172,6 +177,7 @@ class RAGService:
         self,
         db: AsyncSession,
         documents: List[DocumentChunk],
+        user_id: Optional[str] = None,
     ) -> Dict[str, int]:
         """
         Batch-index multiple documents, embedding them in a single provider call.
@@ -200,7 +206,7 @@ class RAGService:
                  created_at, updated_at)
             VALUES
                 (:title, :content, :source, :category, :metadata,
-                 :embedding::vector, NOW(), NOW())
+                 CAST(:embedding AS vector), NOW(), NOW())
             ON CONFLICT (title, source) DO UPDATE
                 SET content    = EXCLUDED.content,
                     category   = EXCLUDED.category,
@@ -212,12 +218,16 @@ class RAGService:
         for doc, emb in zip(documents, embeddings):
             try:
                 emb_str = f"[{','.join(map(str, emb))}]"
+                meta = doc.metadata.copy()
+                if user_id:
+                    meta["user_id"] = user_id
+                
                 await db.execute(sql, {
                     "title":     doc.title,
                     "content":   doc.content,
                     "source":    doc.source,
                     "category":  doc.category,
-                    "metadata":  json.dumps(doc.metadata),
+                    "metadata":  json.dumps(meta),
                     "embedding": emb_str,
                 })
                 indexed += 1
@@ -241,6 +251,7 @@ class RAGService:
         self,
         db: AsyncSession,
         query: str,
+        user_id: str,
         *,
         top_k: int = RAG_TOP_K,
         category: Optional[str] = None,
@@ -278,7 +289,7 @@ class RAGService:
             return []
 
         # Build WHERE clauses
-        where_parts = ["(1 - (embedding <=> :embedding::vector)) >= :min_similarity"]
+        where_parts = ["(1 - (embedding <=> CAST(:embedding AS vector))) >= :min_similarity"]
         params: Dict[str, Any] = {
             "embedding":      emb_str,
             "min_similarity": min_similarity,
@@ -289,9 +300,15 @@ class RAGService:
             where_parts.append("category = :category")
             params["category"] = category
 
-        if metadata_filter:
-            where_parts.append("metadata @> :meta_filter::jsonb")
-            params["meta_filter"] = json.dumps(metadata_filter)
+        meta_filter = metadata_filter or {}
+        
+        # User isolation: match this user's docs OR global docs (no user_id)
+        where_parts.append("(metadata @> CAST(:user_id_json AS jsonb) OR metadata->'user_id' IS NULL)")
+        params["user_id_json"] = json.dumps({"user_id": user_id})
+        
+        if meta_filter:
+            where_parts.append("metadata @> CAST(:meta_filter AS jsonb)")
+            params["meta_filter"] = json.dumps(meta_filter)
 
         where_sql = " AND ".join(where_parts)
 
@@ -303,7 +320,7 @@ class RAGService:
                 source,
                 category,
                 metadata,
-                (1 - (embedding <=> :embedding::vector)) AS similarity
+                (1 - (embedding <=> CAST(:embedding AS vector))) AS similarity
             FROM career_documents
             WHERE {where_sql}
             ORDER BY similarity DESC

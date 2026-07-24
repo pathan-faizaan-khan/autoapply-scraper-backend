@@ -576,6 +576,46 @@ async def getLatestSkillAssessment(
         return None
 
 
+# ─── USER PROFILES & JOB APPLICATIONS ──────────────────────────────────────────
+
+async def getUserProfile(
+    session: AsyncSession,
+    user_id: str,
+) -> Optional[dict]:
+    """
+    Fetch the user profile (resume_text, skills, links) from the Node.js schema.
+    """
+    sql = text("SELECT * FROM user_profiles WHERE user_id = :user_id LIMIT 1")
+    try:
+        # Cast to int because node schema uses integer for user_id
+        result = await session.execute(sql, {"user_id": int(user_id)})
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        print(f"[CareerRepository] getUserProfile error: {exc}")
+        return None
+
+async def getJobApplications(
+    session: AsyncSession,
+    user_id: str,
+    limit: int = 10,
+) -> List[dict]:
+    """
+    Fetch the most recent job applications for this user from the Node.js schema.
+    """
+    sql = text(
+        "SELECT * FROM job_applications "
+        "WHERE user_id = :user_id "
+        "ORDER BY applied_at DESC LIMIT :limit"
+    )
+    try:
+        result = await session.execute(sql, {"user_id": int(user_id), "limit": limit})
+        return [dict(r) for r in result.mappings().all()]
+    except Exception as exc:
+        print(f"[CareerRepository] getJobApplications error: {exc}")
+        return []
+
+
 # ─── SPRINT 4: DECISION ENGINE TABLES ─────────────────────────────────────────
 
 async def saveCareerScore(

@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS career_documents (
     source      VARCHAR(512),                           -- URL or filepath of origin
     category    VARCHAR(100)  NOT NULL DEFAULT 'career',
     metadata    JSONB         NOT NULL DEFAULT '{}',    -- arbitrary key-value tags
-    embedding   VECTOR(384),                            -- 384-dim: sentence-transformers all-MiniLM-L6-v2
+    embedding   VECTOR(768),                            -- 768-dim: Gemini text-embedding-004
                                                         -- Change to VECTOR(1536) for OpenAI ada-002 / text-embedding-3-small
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),

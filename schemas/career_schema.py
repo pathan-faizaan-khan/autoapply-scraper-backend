@@ -36,6 +36,7 @@ class CareerChatRequest(BaseModel):
     resume_data:  Optional[dict]               = Field(None,  description="Parsed resume JSON")
     target_role:  Optional[str]                = Field(None,  description="User's target role")
     career_path:  Optional[str]                = Field(None,  description="Currently selected career path title")
+    reset_session: Optional[bool]              = Field(False, description="Wipe previous chat history for this user")
 
 
 class RoadmapRequest(BaseModel):
@@ -78,6 +79,7 @@ class CareerChatResponse(BaseModel):
     reply:      str                                         # AI-generated reply
     suggestions: Optional[List[str]] = None                 # Follow-up action suggestions
     session_id: Optional[int]        = None                 # DB id of the career_session row
+    action_taken: Optional[str]      = None                 # e.g., "roadmap_generated"
 
 
 class RoadmapStepResponse(BaseModel):

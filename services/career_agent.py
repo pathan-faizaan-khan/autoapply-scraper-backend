@@ -16,6 +16,7 @@ placeholder — the full agentic loop will be added in the next iteration.
 """
 
 from typing import Optional, List
+import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +46,7 @@ async def handleCareerChat(
     resume_data: Optional[dict] = None,
     target_role: Optional[str]  = None,
     career_path: Optional[str]  = None,
+    reset_session: bool         = False,
 ) -> dict:
     """
     Handle a single turn of the AI career guidance chat.
@@ -74,12 +76,13 @@ async def handleCareerChat(
         resume_data: Optional parsed resume for personalisation.
         target_role: User's stated target role.
         career_path: Currently selected career path title.
+        reset_session: Wipe chat history before processing.
 
     Returns:
         dict matching the CareerChatResponse schema.
     """
     # ── STEP 1: Load session history ──────────────────────────────────────────
-    existing = await repo.getSession(db, user_id)
+    existing = await repo.getSession(db, user_id) if not reset_session else None
     history: list = []
 
     if existing:
@@ -119,6 +122,11 @@ async def handleCareerChat(
     # LLMService._build_messages accepts an explicit messages list.
     messages = [{"role": "system", "content": system_prompt}]
     
+    # Implement Sliding Window to avoid context overflow (keep last 20 messages max)
+    MAX_CONTEXT = 20
+    if len(history) > MAX_CONTEXT:
+        history = history[-MAX_CONTEXT:]
+
     # Inject past conversation
     for msg in history:
         # Ensure we only have standard roles
@@ -131,10 +139,146 @@ async def handleCareerChat(
     messages.append({"role": "user", "content": message})
 
     # ── STEP 4: Call LLM ──────────────────────────────────────────────────────
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_roadmap",
+                "description": "Generate a personalized career roadmap for the user. Call this when the user explicitly asks for a roadmap, learning path, or a step-by-step guide.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_role": {"type": "string", "description": "The target role (e.g., Software Engineer)"},
+                        "preferred_duration": {"type": "integer", "description": "Duration in days (e.g., 90)"}
+                    },
+                    "required": ["target_role"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "fetch_user_resume",
+                "description": "Fetch the user's parsed resume and skills from the database. Call this when you need context about the user's background.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "fetch_job_applications",
+                "description": "Fetch the user's recent job applications from the database to see what they have applied for.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "fetch_opportunities",
+                "description": "Fetch career opportunities such as hackathons, internships, or open source programs that match the user's skills or target role.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "opp_type": {"type": "string", "description": "Type of opportunity: hackathon, internship, summer_of_code, or competition"},
+                        "tags": {"type": "string", "description": "Comma-separated list of skills or topics (e.g. 'react, node')"},
+                        "country": {"type": "string", "description": "Country abbreviation or name"}
+                    }
+                }
+            }
+        }
+    ]
+
     llm = LLMService()
+    action_taken = None
+    assistant_reply = ""
+    
     try:
-        response = await llm.generate_text(messages=messages)
-        assistant_reply = response.content
+        max_tool_iterations = 3
+        for i in range(max_tool_iterations):
+            response = await llm.generate_text(messages=messages, tools=tools)
+            assistant_reply = response.content or ""
+            
+            if not response.tool_calls:
+                break
+                
+            tool_calls_dict = [tc.model_dump() for tc in response.tool_calls]
+            messages.append({"role": "assistant", "content": assistant_reply, "tool_calls": tool_calls_dict})
+            
+            for tool_call in response.tool_calls:
+                tool_name = getattr(tool_call.function, "name", "")
+                tool_id = getattr(tool_call, "id", "")
+                
+                if tool_name == "generate_roadmap":
+                    args_str = getattr(tool_call.function, "arguments", "{}")
+                    try:
+                        args = json.loads(args_str)
+                    except json.JSONDecodeError:
+                        args = {}
+
+                    roadmap_role = args.get("target_role", target_role or "Software Engineer")
+                    roadmap_duration = args.get("preferred_duration", DEFAULT_ROADMAP_DURATION_DAYS)
+
+                    await orchestrateRoadmap(
+                        db,
+                        user_id=user_id,
+                        target_role=roadmap_role,
+                        current_skills=[], 
+                        experience_level=DEFAULT_EXPERIENCE_LEVEL,
+                        preferred_duration=roadmap_duration,
+                    )
+                    action_taken = "roadmap_generated"
+                    messages.append({"role": "tool", "tool_call_id": tool_id, "name": tool_name, "content": "Roadmap successfully generated in DB."})
+                    
+                elif tool_name == "fetch_user_resume":
+                    profile = await repo.getUserProfile(db, user_id)
+                    if profile:
+                        content = f"Resume:\n{profile.get('resume_text', 'None')}\nSkills: {profile.get('skills', 'None')}"
+                    else:
+                        content = "User profile or resume not found."
+                    messages.append({"role": "tool", "tool_call_id": tool_id, "name": tool_name, "content": content})
+                    
+                elif tool_name == "fetch_job_applications":
+                    apps = await repo.getJobApplications(db, user_id)
+                    if apps:
+                        content = "Recent applications:\n" + "\n".join([f"- {a['job_title']} at {a['company_name']} (Status: {a['status']})" for a in apps])
+                    else:
+                        content = "No recent job applications found."
+                    messages.append({"role": "tool", "tool_call_id": tool_id, "name": tool_name, "content": content})
+                    
+                elif tool_name == "fetch_opportunities":
+                    args_str = getattr(tool_call.function, "arguments", "{}")
+                    try:
+                        args = json.loads(args_str)
+                    except json.JSONDecodeError:
+                        args = {}
+                    
+                    tags = args.get("tags")
+                    tags_list = [t.strip() for t in tags.split(",")] if tags else None
+                    opps = await orchestrateOpportunities(
+                        db,
+                        opp_type=args.get("opp_type"),
+                        tags=tags_list,
+                        country=args.get("country"),
+                        limit=5,
+                        offset=0
+                    )
+                    
+                    if opps.get("opportunities"):
+                        content = "Found opportunities:\n" + "\n".join([f"- {o['title']} ({o['type']}) at {o['organization']}" for o in opps["opportunities"]])
+                    else:
+                        content = "No matching opportunities found right now."
+                    messages.append({"role": "tool", "tool_call_id": tool_id, "name": tool_name, "content": content})
+                
+                else:
+                    messages.append({"role": "tool", "tool_call_id": tool_id, "name": tool_name, "content": "Unknown tool."})
     except Exception as e:
         # Graceful degradation on LLM failure
         import logging
@@ -142,6 +286,9 @@ async def handleCareerChat(
         assistant_reply = "I'm having trouble connecting to my AI brain right now. Please try again in a moment."
 
     # ── STEP 5: Append to History & Persist ───────────────────────────────────
+    if not assistant_reply:
+        assistant_reply = "I've checked my tools, but I need a moment to organize the information. What specifically would you like to know?"
+        
     history.append({"role": "user", "content": message})
     history.append({"role": "assistant", "content": assistant_reply})
 
@@ -166,6 +313,7 @@ async def handleCareerChat(
         "reply":       assistant_reply,
         "suggestions": suggestions,
         "session_id":  session_id,
+        "action_taken": action_taken,
     }
 
 

@@ -61,6 +61,7 @@ class LLMResponse(BaseModel):
     completion_tokens: int
     total_tokens: int
     finish_reason: str
+    tool_calls: Optional[List[Any]] = None
     raw_response: Optional[Dict[str, Any]] = None
 
 
@@ -193,12 +194,12 @@ class LLMService:
 
         return built
 
-    def _extract_response(self, response) -> tuple[str, str]:
-        """Extract (content, finish_reason) from a Groq response object."""
+    def _extract_response(self, response) -> tuple[str, str, Optional[List[Any]]]:
+        """Extract (content, finish_reason, tool_calls) from a Groq response object."""
         if not response.choices:
             raise InvalidResponseError("LLM returned an empty choices array.")
         choice = response.choices[0]
-        return (choice.message.content or ""), (choice.finish_reason or "")
+        return (choice.message.content or ""), (choice.finish_reason or ""), choice.message.tool_calls
 
     # ── PUBLIC METHODS ────────────────────────────────────────────────────────
 
@@ -207,6 +208,7 @@ class LLMService:
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         messages: Optional[List[Dict[str, str]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
         temperature: float = TEMPERATURE,
         max_tokens: int = MAX_TOKENS,
     ) -> LLMResponse:
@@ -228,17 +230,23 @@ class LLMService:
             req_id, MODEL_NAME, temperature, max_tokens,
         )
 
+        kwargs = {
+            "messages": built_messages,
+            "model": MODEL_NAME,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": TOP_P,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
         response, latency_ms = await self._execute_with_retries(
             req_id,
             self.client.chat.completions.create,
-            messages=built_messages,
-            model=MODEL_NAME,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=TOP_P,
+            **kwargs,
         )
 
-        content, finish_reason = self._extract_response(response)
+        content, finish_reason, tool_calls = self._extract_response(response)
 
         logger.info(
             "[%s] generate_text — done in %.2fms | tokens=%d finish=%s",
@@ -253,6 +261,7 @@ class LLMService:
             completion_tokens=response.usage.completion_tokens,
             total_tokens=response.usage.total_tokens,
             finish_reason=finish_reason,
+            tool_calls=tool_calls,
             raw_response=response.model_dump(),
         )
 
@@ -284,17 +293,23 @@ class LLMService:
         built_messages = self._build_messages(system_prompt, user_prompt, messages)
 
         # Ensure a JSON instruction exists in the system prompt.
-        if built_messages and built_messages[0]["role"] == "system":
-            if "json" not in built_messages[0]["content"].lower():
-                built_messages[0] = {
-                    "role": "system",
-                    "content": built_messages[0]["content"] + "\nYou must reply in valid JSON format only.",
-                }
+        if response_model is not None:
+            schema = response_model.model_json_schema()
+            schema_str = json.dumps(schema, indent=2)
+            schema_instruction = f"\n\nYou MUST reply in valid JSON format only. Your JSON response MUST perfectly match this JSON Schema:\n{schema_str}"
+            if built_messages and built_messages[0]["role"] == "system":
+                built_messages[0]["content"] += schema_instruction
+            else:
+                built_messages.insert(0, {"role": "system", "content": schema_instruction})
         else:
-            built_messages.insert(
-                0,
-                {"role": "system", "content": "You must reply in valid JSON format only."},
-            )
+            if built_messages and built_messages[0]["role"] == "system":
+                if "json" not in built_messages[0]["content"].lower():
+                    built_messages[0]["content"] += "\nYou must reply in valid JSON format only."
+            else:
+                built_messages.insert(
+                    0,
+                    {"role": "system", "content": "You must reply in valid JSON format only."},
+                )
 
         # Single req_id per generate_json call — preserved across repair retries.
         req_id = str(uuid.uuid4())
@@ -316,7 +331,7 @@ class LLMService:
                 response_format={"type": "json_object"},
             )
 
-            content, _ = self._extract_response(response)
+            content, _, _ = self._extract_response(response)
 
             logger.info(
                 "[%s] generate_json — raw response in %.2fms | tokens=%d",

@@ -70,6 +70,7 @@ class DocumentIndexer:
         source: str = "",
         category: str = "career",
         metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,
     ) -> Optional[int]:
         """
         Index a single raw text document.
@@ -81,6 +82,7 @@ class DocumentIndexer:
             source:   Origin URL or filepath (used for deduplication).
             category: One of VALID_CATEGORIES.
             metadata: Arbitrary key-value metadata tags (e.g. {"level": "junior"}).
+            user_id:  Optional user ID to bind this document to a specific user.
 
         Returns:
             Database row ID on success, None on failure.
@@ -98,12 +100,13 @@ class DocumentIndexer:
             category=category,
             metadata=metadata or {},
         )
-        return await self._rag.index_document(db, doc)
+        return await self._rag.index_document(db, doc, user_id=user_id)
 
     async def index_batch(
         self,
         db: AsyncSession,
         documents: List[Dict[str, Any]],
+        user_id: Optional[str] = None,
     ) -> Dict[str, int]:
         """
         Batch-index a list of document dicts.
@@ -118,6 +121,7 @@ class DocumentIndexer:
         Args:
             db:        Async DB session.
             documents: List of document attribute dicts.
+            user_id:   Optional user ID to bind documents to a specific user.
 
         Returns:
             {"indexed": N, "failed": M, "skipped": K}
@@ -150,7 +154,7 @@ class DocumentIndexer:
         if not chunks:
             return {"indexed": 0, "failed": 0, "skipped": skipped}
 
-        result = await self._rag.index_documents(db, chunks)
+        result = await self._rag.index_documents(db, chunks, user_id=user_id)
         result["skipped"] = skipped
         return result
 

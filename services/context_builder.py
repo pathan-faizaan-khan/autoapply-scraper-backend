@@ -131,6 +131,8 @@ class ContextBuilder:
         roadmap_steps: Optional[List[dict]] = None,
         opportunities: Optional[List[dict]] = None,
         session_history: Optional[List[dict]] = None,
+        existing_skills: Optional[List[str]] = None,
+        missing_skills: Optional[List[str]] = None,
         rag_category: Optional[str] = None,
         rag_top_k: int = 5,
     ) -> CareerContext:
@@ -162,17 +164,17 @@ class ContextBuilder:
         resume_snippet = self._extract_resume_snippet(resume_data)
 
         # ── Extract skill gap data ─────────────────────────────────────────────
-        existing_skills: List[str] = []
-        missing_skills: List[str] = []
+        _existing: List[str] = existing_skills or []
+        _missing: List[str] = missing_skills or []
         gap_score: Optional[float] = None
 
         if skill_assessment:
-            existing_skills = skill_assessment.get("existing_skills") or []
-            missing_skills  = skill_assessment.get("missing_skills") or []
-            gap_score       = skill_assessment.get("gap_score")
+            _existing = skill_assessment.get("existing_skills") or _existing
+            _missing  = skill_assessment.get("missing_skills") or _missing
+            gap_score = skill_assessment.get("gap_score")
 
         # ── RAG retrieval ──────────────────────────────────────────────────────
-        rag_query = self._build_rag_query(query, target_role, missing_skills)
+        rag_query = self._build_rag_query(query, target_role, _missing)
         retrieved_docs: List[RetrievedDocument] = []
 
         if db is not None:
@@ -180,6 +182,7 @@ class ContextBuilder:
                 retrieved_docs = await self._rag.retrieve(
                     db,
                     query=rag_query,
+                    user_id=user_id,
                     top_k=rag_top_k,
                     category=rag_category,
                 )
@@ -197,8 +200,8 @@ class ContextBuilder:
             target_role=target_role,
             career_path=career_path,
             resume_snippet=resume_snippet,
-            existing_skills=existing_skills,
-            missing_skills=missing_skills,
+            existing_skills=_existing,
+            missing_skills=_missing,
             gap_score=gap_score,
             roadmap_steps=roadmap_steps or [],
             retrieved_docs=retrieved_docs,

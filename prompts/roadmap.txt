@@ -5,3 +5,21 @@ Experience Level: {{experience}}
 Timeline: {{timeline_days}} days
 
 Generate a step-by-step learning roadmap tailored to this person. Output in valid JSON only.
+
+You MUST strictly follow this exact JSON schema for your response:
+{
+  "steps": [
+    {
+      "step_order": 1,
+      "title": "String (Short title of the step)",
+      "description": "String (Detailed description of what to learn/do)",
+      "difficulty": "String (e.g. 'Beginner', 'Intermediate', 'Advanced')",
+      "estimated_days": 7,
+      "category": "String (e.g. 'Frontend', 'Backend', 'System Design')",
+      "is_mandatory": true,
+      "resources": [
+        { "title": "String", "url": "String" }
+      ]
+    }
+  ]
+}

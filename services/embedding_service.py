@@ -106,55 +106,57 @@ class LocalEmbeddingProvider:
         return [v.tolist() for v in vectors]
 
 
-# ─── OPENAI-COMPATIBLE PROVIDER (optional, activated via env var) ─────────────
+# ─── GEMINI-COMPATIBLE PROVIDER (optional, activated via env var) ─────────────
 
-class OpenAIEmbeddingProvider:
+class GeminiEmbeddingProvider:
     """
-    Embedding provider using the OpenAI Embeddings API (text-embedding-3-small).
+    Embedding provider using the Gemini Embeddings API (models/text-embedding-004).
 
-    Activated when OPENAI_API_KEY is set in the environment.
-    Produces 1536-dimension vectors matching the migration's VECTOR(1536).
-
-    Requires: pip install openai
+    Activated when GEMINI_API_KEY is set in the environment.
+    Requires: pip install google-genai
     """
 
-    MODEL_NAME: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    MODEL_NAME: str = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
     _client = None
 
-    def _get_client(self):
-        if OpenAIEmbeddingProvider._client is None:
+    @classmethod
+    def _ensure_configured(cls):
+        if cls._client is None:
             try:
-                from openai import AsyncOpenAI  # type: ignore
-                api_key = os.getenv("OPENAI_API_KEY", "")
+                from google import genai
+                api_key = os.getenv("GEMINI_API_KEY", "")
                 if not api_key:
-                    raise ValueError("OPENAI_API_KEY is not set.")
-                OpenAIEmbeddingProvider._client = AsyncOpenAI(api_key=api_key)
+                    raise ValueError("GEMINI_API_KEY is not set.")
+                cls._client = genai.Client(api_key=api_key)
             except ImportError as exc:
                 raise ImportError(
-                    "openai package is required for OpenAI embeddings. "
-                    "Install it with: pip install openai"
+                    "google-genai package is required for Gemini embeddings. "
+                    "Install it with: pip install google-genai"
                 ) from exc
-        return OpenAIEmbeddingProvider._client
 
     @property
     def dimensions(self) -> int:
-        return 1536
+        return 768
 
     async def embed(self, text: str) -> List[float]:
-        client = self._get_client()
-        response = await client.embeddings.create(
+        self._ensure_configured()
+        from google.genai import types
+        result = self._client.models.embed_content(
             model=self.MODEL_NAME,
-            input=text,
+            contents=text,
+            config=types.EmbedContentConfig(output_dimensionality=768)
         )
-        return response.data[0].embedding
+        return result.embeddings[0].values
 
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        client = self._get_client()
-        response = await client.embeddings.create(
+        self._ensure_configured()
+        from google.genai import types
+        result = self._client.models.embed_content(
             model=self.MODEL_NAME,
-            input=texts,
+            contents=texts,
+            config=types.EmbedContentConfig(output_dimensionality=768)
         )
-        return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+        return [e.values for e in result.embeddings]
 
 
 # ─── SERVICE ──────────────────────────────────────────────────────────────────
@@ -164,7 +166,7 @@ class EmbeddingService:
     Unified embedding interface that delegates to the configured provider.
 
     Provider selection (priority order):
-      1. If OPENAI_API_KEY is present → OpenAIEmbeddingProvider (1536 dims)
+      1. If GEMINI_API_KEY is present → GeminiEmbeddingProvider (768 dims)
       2. Otherwise → LocalEmbeddingProvider (sentence-transformers, 384 dims)
 
     To force a specific provider, inject it via the constructor:
@@ -174,9 +176,9 @@ class EmbeddingService:
     def __init__(self, provider: EmbeddingProvider = None) -> None:
         if provider is not None:
             self._provider = provider
-        elif os.getenv("OPENAI_API_KEY"):
-            self._provider = OpenAIEmbeddingProvider()
-            logger.info("EmbeddingService: using OpenAI provider (1536 dims).")
+        elif os.getenv("GEMINI_API_KEY"):
+            self._provider = GeminiEmbeddingProvider()
+            logger.info("EmbeddingService: using Gemini provider (768 dims).")
         else:
             self._provider = LocalEmbeddingProvider()
             logger.info("EmbeddingService: using local sentence-transformers provider.")

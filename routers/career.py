@@ -41,6 +41,7 @@ from schemas.career_schema import (
 import services.career_agent as agent
 import services.opportunity_service as opportunity_svc
 import services.roadmap_service as roadmap_svc
+import repositories.career_repository as repo
 from config.career_config import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -84,11 +85,30 @@ async def career_chat(
             resume_data=req.resume_data,
             target_role=req.target_role,
             career_path=req.career_path,
+            reset_session=req.reset_session,
         )
         return CareerChatResponse(**result)
     except Exception as exc:
         print(f"[CareerRouter] /chat error: {exc}")
         raise HTTPException(status_code=500, detail=f"Career chat error: {str(exc)}")
+
+@router.get(
+    "/session/{user_id}",
+    summary="Get Chat Session",
+    description="Fetch the active career chat session for the given user.",
+)
+async def get_career_session(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        session = await repo.getSession(db, user_id=user_id)
+        if not session:
+            return {"messages": []}
+        return {"messages": session.get("messages", [])}
+    except Exception as exc:
+        print(f"[CareerRouter] /session error: {exc}")
+        raise HTTPException(status_code=500, detail=f"Error fetching session: {str(exc)}")
 
 
 # ─── ROADMAP ──────────────────────────────────────────────────────────────────
