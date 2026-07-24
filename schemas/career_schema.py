@@ -198,3 +198,88 @@ class UserProgressSummaryResponse(BaseModel):
     in_progress_steps:     int
     overall_percentage:    float
     step_details:          List[ProgressResponse] = Field(default_factory=list)
+
+
+# ─── SPRINT 4: DECISION INTELLIGENCE SCHEMAS ──────────────────────────────────
+
+class AIConfidenceItem(BaseModel):
+    """Base class for any AI-recommended item needing explainability."""
+    confidence: float
+    reason:     str
+
+class RecommendedSkill(AIConfidenceItem):
+    skill:    str
+    priority: str = Field(..., description="HIGH | MEDIUM | LOW")
+
+class RecommendedProject(AIConfidenceItem):
+    title:       str
+    description: str
+
+class RecommendedCertification(AIConfidenceItem):
+    title: str
+
+class CareerMatch(AIConfidenceItem):
+    career: str
+    score:  float
+
+class RecommendationRequest(BaseModel):
+    user_id: str
+
+class RecommendationResponse(BaseModel):
+    user_id:                    str
+    career_matches:             List[CareerMatch]
+    recommended_skills:         List[RecommendedSkill]
+    recommended_projects:       List[RecommendedProject]
+    recommended_certifications: List[RecommendedCertification]
+    recommended_opportunities:  List[dict]
+
+
+class ResumeMatchRequest(BaseModel):
+    user_id:         str
+    job_description: str
+    resume_data:     Optional[dict] = None
+
+class ResumeMatchResponse(BaseModel):
+    user_id:         str
+    match_score:     float
+    confidence:      float
+    reason:          str
+    missing_skills:  List[str]
+    strong_skills:   List[str]
+    weak_areas:      List[str]
+    suggestions:     List[str]
+
+
+class CareerScoreResponse(BaseModel):
+    user_id:         str
+    overall_score:   float
+    technical_score: float
+    resume_score:    float
+    interview_score: float
+    market_score:    float
+    confidence:      float
+    reason:          str
+    last_updated:    Optional[datetime] = None
+
+
+class LearningPlanRequest(BaseModel):
+    user_id:            str
+    weekly_study_hours: int
+    target_date:        Optional[datetime] = None
+
+class DailyMilestone(BaseModel):
+    day:   int
+    title: str
+    tasks: List[str]
+
+class WeeklyPlan(BaseModel):
+    week_number:      int
+    focus_area:       str
+    daily_milestones: List[DailyMilestone]
+
+class LearningPlanResponse(BaseModel):
+    user_id:            str
+    career_path:        str
+    weekly_study_hours: int
+    target_date:        Optional[datetime] = None
+    weeks:              List[WeeklyPlan]

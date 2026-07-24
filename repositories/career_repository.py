@@ -574,3 +574,187 @@ async def getLatestSkillAssessment(
     except Exception as exc:
         print(f"[CareerRepository] getLatestSkillAssessment error: {exc}")
         return None
+
+
+# ─── SPRINT 4: DECISION ENGINE TABLES ─────────────────────────────────────────
+
+async def saveCareerScore(
+    session: AsyncSession,
+    *,
+    user_id:         str,
+    overall_score:   float,
+    technical_score: float,
+    resume_score:    float,
+    interview_score: float,
+    market_score:    float,
+    metadata:        Optional[dict] = None,
+) -> Optional[dict]:
+    sql = text("""
+        INSERT INTO career_scores
+            (user_id, overall_score, technical_score, resume_score, interview_score, market_score, metadata, created_at)
+        VALUES
+            (:user_id, :overall_score, :technical_score, :resume_score, :interview_score, :market_score, :metadata, NOW())
+        RETURNING *
+    """)
+    try:
+        result = await session.execute(sql, {
+            "user_id": user_id,
+            "overall_score": overall_score,
+            "technical_score": technical_score,
+            "resume_score": resume_score,
+            "interview_score": interview_score,
+            "market_score": market_score,
+            "metadata": json.dumps(metadata or {}),
+        })
+        await session.commit()
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        await session.rollback()
+        print(f"[CareerRepository] saveCareerScore error: {exc}")
+        return None
+
+async def getLatestCareerScore(session: AsyncSession, user_id: str) -> Optional[dict]:
+    sql = text("SELECT * FROM career_scores WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1")
+    try:
+        result = await session.execute(sql, {"user_id": user_id})
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        print(f"[CareerRepository] getLatestCareerScore error: {exc}")
+        return None
+
+
+async def saveRecommendation(
+    session: AsyncSession,
+    *,
+    user_id:                    str,
+    career_matches:             list,
+    recommended_skills:         list,
+    recommended_projects:       list,
+    recommended_certifications: list,
+    recommended_opportunities:  list,
+) -> Optional[dict]:
+    sql = text("""
+        INSERT INTO recommendations
+            (user_id, career_matches, recommended_skills, recommended_projects, recommended_certifications, recommended_opportunities, created_at)
+        VALUES
+            (:user_id, :cm, :rs, :rp, :rc, :ro, NOW())
+        RETURNING *
+    """)
+    try:
+        result = await session.execute(sql, {
+            "user_id": user_id,
+            "cm": json.dumps(career_matches),
+            "rs": json.dumps(recommended_skills),
+            "rp": json.dumps(recommended_projects),
+            "rc": json.dumps(recommended_certifications),
+            "ro": json.dumps(recommended_opportunities),
+        })
+        await session.commit()
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        await session.rollback()
+        print(f"[CareerRepository] saveRecommendation error: {exc}")
+        return None
+
+async def getLatestRecommendation(session: AsyncSession, user_id: str) -> Optional[dict]:
+    sql = text("SELECT * FROM recommendations WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1")
+    try:
+        result = await session.execute(sql, {"user_id": user_id})
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        print(f"[CareerRepository] getLatestRecommendation error: {exc}")
+        return None
+
+
+async def saveLearningPlan(
+    session: AsyncSession,
+    *,
+    user_id:            str,
+    career_path_id:     Optional[int],
+    target_date:        Optional[datetime],
+    weekly_study_hours: int,
+    plan_data:          list,
+) -> Optional[dict]:
+    sql = text("""
+        INSERT INTO learning_plans
+            (user_id, career_path_id, target_date, weekly_study_hours, plan_data, created_at, updated_at)
+        VALUES
+            (:user_id, :career_path_id, :target_date, :weekly_study_hours, :plan_data, NOW(), NOW())
+        RETURNING *
+    """)
+    try:
+        result = await session.execute(sql, {
+            "user_id": user_id,
+            "career_path_id": career_path_id,
+            "target_date": target_date,
+            "weekly_study_hours": weekly_study_hours,
+            "plan_data": json.dumps(plan_data),
+        })
+        await session.commit()
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        await session.rollback()
+        print(f"[CareerRepository] saveLearningPlan error: {exc}")
+        return None
+
+async def getLatestLearningPlan(session: AsyncSession, user_id: str) -> Optional[dict]:
+    sql = text("SELECT * FROM learning_plans WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1")
+    try:
+        result = await session.execute(sql, {"user_id": user_id})
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        print(f"[CareerRepository] getLatestLearningPlan error: {exc}")
+        return None
+
+
+async def saveResumeMatch(
+    session: AsyncSession,
+    *,
+    user_id:         str,
+    job_description: str,
+    match_score:     float,
+    missing_skills:  list,
+    strong_skills:   list,
+    weak_areas:      list,
+    suggestions:     list,
+) -> Optional[dict]:
+    sql = text("""
+        INSERT INTO resume_matches
+            (user_id, job_description, match_score, missing_skills, strong_skills, weak_areas, suggestions, created_at)
+        VALUES
+            (:user_id, :job_description, :match_score, :missing_skills, :strong_skills, :weak_areas, :suggestions, NOW())
+        RETURNING *
+    """)
+    try:
+        result = await session.execute(sql, {
+            "user_id": user_id,
+            "job_description": job_description,
+            "match_score": match_score,
+            "missing_skills": json.dumps(missing_skills),
+            "strong_skills": json.dumps(strong_skills),
+            "weak_areas": json.dumps(weak_areas),
+            "suggestions": json.dumps(suggestions),
+        })
+        await session.commit()
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        await session.rollback()
+        print(f"[CareerRepository] saveResumeMatch error: {exc}")
+        return None
+
+async def getLatestResumeMatch(session: AsyncSession, user_id: str) -> Optional[dict]:
+    sql = text("SELECT * FROM resume_matches WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1")
+    try:
+        result = await session.execute(sql, {"user_id": user_id})
+        row = result.mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        print(f"[CareerRepository] getLatestResumeMatch error: {exc}")
+        return None

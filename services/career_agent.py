@@ -396,3 +396,58 @@ async def orchestrateCareerPaths(
     """
     paths = await repo.listCareerPaths(db, limit=limit, offset=offset)
     return {"total": len(paths), "paths": paths}
+
+
+# ─── SPRINT 4: DECISION ENGINE ORCHESTRATION ──────────────────────────────────
+
+from schemas.career_schema import (
+    RecommendationRequest,
+    ResumeMatchRequest,
+    LearningPlanRequest,
+)
+from services.recommendation_service import RecommendationService
+from services.resume_match_service import ResumeMatchService
+from services.career_score_service import CareerScoreService
+from services.learning_plan_service import LearningPlanService
+
+async def orchestrateRecommendation(
+    db: AsyncSession,
+    request: RecommendationRequest
+) -> dict:
+    svc = RecommendationService()
+    resp = await svc.generate_recommendations(db, request)
+    return resp.model_dump()
+
+async def orchestrateResumeMatch(
+    db: AsyncSession,
+    request: ResumeMatchRequest
+) -> dict:
+    svc = ResumeMatchService()
+    resp = await svc.generate_resume_match(db, request)
+    return resp.model_dump()
+
+async def orchestrateCareerScore(
+    db: AsyncSession,
+    user_id: str
+) -> dict:
+    svc = CareerScoreService()
+    # Returns cached if recent
+    resp = await svc.get_or_generate_score(db, user_id, force_recalculate=False)
+    return resp.model_dump()
+
+async def orchestrateCareerScoreRecalculate(
+    db: AsyncSession,
+    user_id: str
+) -> dict:
+    svc = CareerScoreService()
+    # Forces recalculation
+    resp = await svc.get_or_generate_score(db, user_id, force_recalculate=True)
+    return resp.model_dump()
+
+async def orchestrateLearningPlan(
+    db: AsyncSession,
+    request: LearningPlanRequest
+) -> dict:
+    svc = LearningPlanService()
+    resp = await svc.generate_learning_plan(db, request)
+    return resp.model_dump()

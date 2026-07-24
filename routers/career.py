@@ -30,6 +30,13 @@ from schemas.career_schema import (
     ProgressResponse,
     UserProgressSummaryResponse,
     OpportunitiesListResponse,
+    RecommendationRequest,
+    RecommendationResponse,
+    ResumeMatchRequest,
+    ResumeMatchResponse,
+    CareerScoreResponse,
+    LearningPlanRequest,
+    LearningPlanResponse,
 )
 import services.career_agent as agent
 import services.opportunity_service as opportunity_svc
@@ -343,3 +350,86 @@ async def list_career_paths(
     except Exception as exc:
         print(f"[CareerRouter] /paths error: {exc}")
         raise HTTPException(status_code=500, detail=f"Career paths retrieval error: {str(exc)}")
+
+
+# ─── SPRINT 4: DECISION ENGINE ENDPOINTS ──────────────────────────────────────
+
+@router.post(
+    "/recommend",
+    response_model=RecommendationResponse,
+    summary="Generate AI Recommendations",
+)
+async def generate_recommendations(
+    req: RecommendationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await agent.orchestrateRecommendation(db, req)
+        return RecommendationResponse(**result)
+    except Exception as exc:
+        print(f"[CareerRouter] /recommend error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post(
+    "/resume-match",
+    response_model=ResumeMatchResponse,
+    summary="Generate Hybrid Resume Match",
+)
+async def generate_resume_match(
+    req: ResumeMatchRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await agent.orchestrateResumeMatch(db, req)
+        return ResumeMatchResponse(**result)
+    except Exception as exc:
+        print(f"[CareerRouter] /resume-match error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@router.get(
+    "/career-score/{user_id}",
+    response_model=CareerScoreResponse,
+    summary="Get or Generate Career Score",
+)
+async def get_career_score(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await agent.orchestrateCareerScore(db, user_id)
+        return CareerScoreResponse(**result)
+    except Exception as exc:
+        print(f"[CareerRouter] /career-score error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post(
+    "/career-score/recalculate",
+    response_model=CareerScoreResponse,
+    summary="Force Recalculate Career Score",
+)
+async def recalculate_career_score(
+    user_id: str = Query(..., description="The ID of the user"),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await agent.orchestrateCareerScoreRecalculate(db, user_id)
+        return CareerScoreResponse(**result)
+    except Exception as exc:
+        print(f"[CareerRouter] /career-score/recalculate error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@router.post(
+    "/learning-plan",
+    response_model=LearningPlanResponse,
+    summary="Generate Adaptive Learning Plan",
+)
+async def generate_learning_plan(
+    req: LearningPlanRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await agent.orchestrateLearningPlan(db, req)
+        return LearningPlanResponse(**result)
+    except Exception as exc:
+        print(f"[CareerRouter] /learning-plan error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
