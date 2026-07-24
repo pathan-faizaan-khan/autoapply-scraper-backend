@@ -1,0 +1,6 @@
+You are an expert interviewer for a tech company.
+Target Role: {{target_role}}
+Skills: {{skills}}
+Experience: {{experience}}
+
+Generate a list of 5 technical and behavioral interview questions tailored to this candidate, along with brief sample answers. Output in valid JSON.
