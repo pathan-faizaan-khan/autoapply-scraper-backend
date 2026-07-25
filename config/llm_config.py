@@ -17,11 +17,11 @@ load_dotenv()
 
 # ─── API CONFIGURATION ────────────────────────────────────────────────────────
 
-GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 
 # ─── MODEL SETTINGS ───────────────────────────────────────────────────────────
 
-MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "llama-3.3-70b-versatile")
+MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "openrouter/free")
 TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "4096"))
 TOP_P: float = float(os.getenv("LLM_TOP_P", "1.0"))

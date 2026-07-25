@@ -13,3 +13,4 @@ playwright_stealth
 aiohttp
 aiosmtplib
 google-genai
+openai

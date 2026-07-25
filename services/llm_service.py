@@ -14,11 +14,11 @@ import asyncio
 from typing import Optional, List, Dict, Any, Type, AsyncGenerator, AsyncIterator
 
 from pydantic import BaseModel
-from groq import AsyncGroq
-import groq
+from openai import AsyncOpenAI
+import openai
 
 from config.llm_config import (
-    GROQ_API_KEY,
+    OPENROUTER_API_KEY,
     MODEL_NAME,
     TEMPERATURE,
     MAX_TOKENS,
@@ -69,11 +69,11 @@ class LLMResponse(BaseModel):
 
 class LLMService:
     """
-    Production-grade async LLM Service backed by Groq.
+    Production-grade async LLM Service backed by OpenRouter.
 
     Design decisions:
     - Manual retry logic (not groq's built-in) so we can log every attempt.
-    - TOP_K is omitted: Groq's chat completion API does not expose it.
+    - TOP_K is omitted: OpenRouter's chat completion API does not uniformly expose it.
     - stream_text() does NOT use _execute_with_retries because a streaming
       response is consumed incrementally; mid-stream retries are unsound.
     - health_check() calls `models.list()` (zero tokens) instead of a real
@@ -81,12 +81,13 @@ class LLMService:
     """
 
     def __init__(self) -> None:
-        if not GROQ_API_KEY:
-            logger.error("Missing GROQ_API_KEY — service cannot be initialised.")
-            raise MissingAPIKeyError("GROQ_API_KEY is not configured.")
+        if not OPENROUTER_API_KEY:
+            logger.error("Missing OPENROUTER_API_KEY — service cannot be initialised.")
+            raise MissingAPIKeyError("OPENROUTER_API_KEY is not configured.")
 
-        self.client = AsyncGroq(
-            api_key=GROQ_API_KEY,
+        self.client = AsyncOpenAI(
+            api_key=OPENROUTER_API_KEY,
+            base_url="https://openrouter.ai/api/v1",
             timeout=REQUEST_TIMEOUT,
             max_retries=0,  # Retries are managed manually for per-attempt logging
         )
@@ -101,7 +102,7 @@ class LLMService:
         **kwargs: Any,
     ):
         """
-        Execute a single Groq API call with transient-error retry logic.
+        Execute a single OpenAI API call with transient-error retry logic.
 
         Retries:
           - RateLimitError    (exponential back-off: 1s, 2s, 4s, …)
@@ -119,12 +120,12 @@ class LLMService:
                 latency_ms = (time.monotonic() - start) * 1000
                 return response, latency_ms
 
-            except groq.AuthenticationError as exc:
+            except openai.AuthenticationError as exc:
                 # Never retry auth failures.
-                logger.error("[%s] Authentication failed — check GROQ_API_KEY.", req_id)
+                logger.error("[%s] Authentication failed — check OPENROUTER_API_KEY.", req_id)
                 raise AuthenticationError(f"LLM authentication failed: {exc}") from exc
 
-            except groq.RateLimitError as exc:
+            except openai.RateLimitError as exc:
                 logger.warning(
                     "[%s] Rate-limit hit (attempt %d/%d).",
                     req_id, attempt + 1, MAX_RETRIES + 1,
@@ -135,7 +136,7 @@ class LLMService:
                     ) from exc
                 await asyncio.sleep(2 ** attempt)
 
-            except groq.APITimeoutError as exc:
+            except openai.APITimeoutError as exc:
                 logger.warning(
                     "[%s] Request timed out (attempt %d/%d).",
                     req_id, attempt + 1, MAX_RETRIES + 1,
@@ -146,7 +147,7 @@ class LLMService:
                     ) from exc
                 await asyncio.sleep(1)
 
-            except groq.APIConnectionError as exc:
+            except openai.APIConnectionError as exc:
                 logger.warning(
                     "[%s] Network error (attempt %d/%d).",
                     req_id, attempt + 1, MAX_RETRIES + 1,
@@ -157,8 +158,8 @@ class LLMService:
                     ) from exc
                 await asyncio.sleep(1)
 
-            except groq.APIError as exc:
-                # All other Groq API errors are not transient — surface immediately.
+            except openai.APIError as exc:
+                # All other OpenAI API errors are not transient — surface immediately.
                 logger.error("[%s] Non-transient API error: %s", req_id, exc)
                 raise LLMError(f"LLM API error: {exc}") from exc
 
@@ -173,7 +174,7 @@ class LLMService:
         messages: Optional[List[Dict[str, str]]] = None,
     ) -> List[Dict[str, str]]:
         """
-        Normalise the two supported input forms into the Groq messages format.
+        Normalise the two supported input forms into the standard messages format.
 
         Priority:
           1. If `messages` is provided directly, use it as-is (advanced callers).
@@ -195,7 +196,7 @@ class LLMService:
         return built
 
     def _extract_response(self, response) -> tuple[str, str, Optional[List[Any]]]:
-        """Extract (content, finish_reason, tool_calls) from a Groq response object."""
+        """Extract (content, finish_reason, tool_calls) from an OpenAI response object."""
         if not response.choices:
             raise InvalidResponseError("LLM returned an empty choices array.")
         choice = response.choices[0]
