@@ -283,7 +283,10 @@ async def handleCareerChat(
         # Graceful degradation on LLM failure
         import logging
         logging.getLogger("career_agent").error("LLM generation failed: %s", e)
-        assistant_reply = "I'm having trouble connecting to my AI brain right now. Please try again in a moment."
+        if "Rate limit" in str(e) or "429" in str(e):
+            assistant_reply = f"I'm currently receiving too many requests (Rate Limit). Please wait a moment and try again. (Details: {e})"
+        else:
+            assistant_reply = f"I'm having trouble connecting to my AI brain right now. Details: {e}"
 
     # ── STEP 5: Append to History & Persist ───────────────────────────────────
     if not assistant_reply:

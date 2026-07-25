@@ -28,8 +28,8 @@ TOP_P: float = float(os.getenv("LLM_TOP_P", "1.0"))
 
 # ─── EXECUTION SETTINGS ───────────────────────────────────────────────────────
 
-REQUEST_TIMEOUT: float = float(os.getenv("LLM_REQUEST_TIMEOUT", "15.0"))
-MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "1"))
+REQUEST_TIMEOUT: float = float(os.getenv("LLM_REQUEST_TIMEOUT", "30.0"))
+MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
 JSON_REPAIR_RETRY_COUNT: int = int(os.getenv("LLM_JSON_REPAIR_RETRY_COUNT", "1"))
 
 # ─── DEFAULT PROMPTS ──────────────────────────────────────────────────────────
