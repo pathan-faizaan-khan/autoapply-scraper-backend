@@ -118,12 +118,6 @@ async def handleCareerChat(
     # ── STEP 3: Load and Render Prompt ────────────────────────────────────────
     variables = ctx_builder.render_to_prompt_variables(context)
     system_prompt = await PromptLoader.render_prompt("career_chat", variables)
-    
-    if voice_mode:
-        system_prompt += "\n\nCRITICAL VOICE MODE INSTRUCTION: The user is talking to you via Voice Mode. You MUST keep your response aggressively short, natural, and conversational. Do not use formatting like markdown, lists, or long explanations. Maximum 1 to 2 short sentences! Get straight to the point."
-    else:
-        system_prompt += "\n\nTEXT MODE INSTRUCTION: Please keep your response concise, short, and highly readable. Avoid long walls of text."
-
     # Convert session history to standard format.
     # LLMService._build_messages accepts an explicit messages list.
     messages = [{"role": "system", "content": system_prompt}]
@@ -208,8 +202,12 @@ async def handleCareerChat(
     
     try:
         max_tool_iterations = 3
+        
+        # Reduce output tokens as requested
+        target_max_tokens = 150 if voice_mode else 300
+        
         for i in range(max_tool_iterations):
-            response = await llm.generate_text(messages=messages, tools=tools)
+            response = await llm.generate_text(messages=messages, tools=tools, max_tokens=target_max_tokens)
             assistant_reply = response.content or ""
             
             if not response.tool_calls:
