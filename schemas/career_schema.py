@@ -37,6 +37,7 @@ class CareerChatRequest(BaseModel):
     target_role:  Optional[str]                = Field(None,  description="User's target role")
     career_path:  Optional[str]                = Field(None,  description="Currently selected career path title")
     reset_session: Optional[bool]              = Field(False, description="Wipe previous chat history for this user")
+    voice_mode:   Optional[bool]               = Field(False, description="Aggressive voice mode optimization")
 
 
 class RoadmapRequest(BaseModel):

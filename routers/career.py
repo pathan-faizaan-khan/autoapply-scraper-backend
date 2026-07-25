@@ -86,6 +86,7 @@ async def career_chat(
             target_role=req.target_role,
             career_path=req.career_path,
             reset_session=req.reset_session,
+            voice_mode=req.voice_mode,
         )
         return CareerChatResponse(**result)
     except Exception as exc:
