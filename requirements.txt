@@ -14,3 +14,4 @@ aiohttp
 aiosmtplib
 google-genai
 openai
+python-jose[cryptography]

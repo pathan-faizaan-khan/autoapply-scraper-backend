@@ -4,7 +4,7 @@ import asyncio
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
@@ -13,6 +13,7 @@ from scraper.playwright_scraper import run_scraper
 from routers.jobs_search import router as jobs_search_router
 from routers.ml_autofill import router as ml_autofill_router
 from routers.career import router as career_router
+from utils.auth import require_non_guest
 
 load_dotenv()
 
@@ -33,6 +34,7 @@ app.include_router(career_router)
 
 scheduler = BackgroundScheduler()
 
+
 def run_scraper_sync():
     import sys
     import asyncio
@@ -40,9 +42,11 @@ def run_scraper_sync():
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     asyncio.run(run_scraper())
 
+
 def periodic_scraper():
     print("Running scheduled job scraper...")
     run_scraper_sync()
+
 
 @app.on_event("startup")
 def startup_event():
@@ -50,24 +54,24 @@ def startup_event():
     scheduler.add_job(periodic_scraper, 'cron', hour='0,12')
     scheduler.start()
 
+
 @app.on_event("shutdown")
 def shutdown_event():
     scheduler.shutdown()
 
-def run_scraper_sync():
-    import sys
-    import asyncio
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    asyncio.run(run_scraper())
 
 @app.post("/api/scrape/run")
-def trigger_scrape(background_tasks: BackgroundTasks):
+def trigger_scrape(
+    background_tasks: BackgroundTasks,
+    _user: dict = Depends(require_non_guest),  # Guests cannot trigger scrapes
+):
+    """Manually trigger a scraping job. Requires a real (non-guest) authenticated user."""
     try:
         background_tasks.add_task(run_scraper_sync)
         return {"message": "Scraping job has been triggered in the background."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/health")
 def health_check():
