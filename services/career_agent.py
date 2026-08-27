@@ -60,7 +60,7 @@ async def handleCareerChat(
            - user's target role and career path
            - current skill snapshot from the latest SkillAssessment
            - the windowed message history
-      5. Call Groq (llama-3.3-70b-versatile) with the assembled messages.
+      5. Call Groq (qwen/qwen3.8-27b) with the assembled messages.
       6. Parse the assistant's reply and extract any structured action items
          (e.g. "generate roadmap", "show opportunities", "check skill gap").
       7. Delegate to the appropriate sub-service if an action is detected.

@@ -209,7 +209,7 @@ async def _scrape_company_website(domain: str) -> list[dict]:
             prompt = f"Extract names, job titles, and emails of key personnel from {domain}. Return JSON: {{'contacts': [{{'name', 'title', 'email'}}]}}.\n{combined_text[:12000]}"
             res = await groq_client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
+                model="qwen/qwen3.8-27b",
                 response_format={"type": "json_object"},
                 temperature=0.1
             )
@@ -263,7 +263,7 @@ async def _groq_rank_contacts(contacts: list[dict], target_role: str, company_na
     try:
         res = await groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3.8-27b",
             response_format={"type": "json_object"},
             temperature=0.1
         )

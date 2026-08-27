@@ -46,7 +46,7 @@ def fill_form_endpoint(req: AutofillRequest):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3.8-27b",
             temperature=0.0,
             response_format={"type": "json_object"}
         )
